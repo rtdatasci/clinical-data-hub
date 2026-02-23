@@ -386,7 +386,7 @@ with tab_bm:
     df_volc = q("""
         SELECT b.gene_symbol,
                b.log2_fold_change,
-               (-1.0 * LOG(MAX(b.pvalue, 1e-300)) / LOG(10)) AS neg_log10_p,
+               b.pvalue,
                b.padj,
                a.assay_type
         FROM biomarkers b
@@ -397,6 +397,8 @@ with tab_bm:
         LIMIT 3000
     """)
     if not df_volc.empty:
+        import numpy as np
+        df_volc["neg_log10_p"] = -np.log10(df_volc["pvalue"].clip(lower=1e-300))
         st.scatter_chart(
             df_volc,
             x="log2_fold_change",

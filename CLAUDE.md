@@ -76,6 +76,23 @@ No ORM. Strategy: `model.model_dump()` → serialize `date`/`datetime` to ISO st
 - Run scripts from the project root so that `config.settings` and `src.*` imports resolve correctly (both use `sys.path.insert(0, PROJECT_ROOT)`).
 - `scripts/generate_synthetic_data.py` uses `random.seed(42)` for reproducibility.
 
+## SQLite Limitations in the Dashboard
+
+SQLite does not support math functions like `LOG()`, `EXP()`, `SQRT()`, etc. Any mathematical transformation must be done in Python/pandas after fetching raw values, not inside the SQL query.
+
+**Pattern to follow** (e.g. volcano plot `-log10(pvalue)`):
+```python
+# WRONG — SQLite has no LOG()
+df = q("SELECT -1.0 * LOG(pvalue) / LOG(10) AS neg_log10_p FROM biomarkers")
+
+# CORRECT — fetch raw value, transform in pandas
+import numpy as np
+df = q("SELECT pvalue FROM biomarkers WHERE pvalue > 0")
+df["neg_log10_p"] = -np.log10(df["pvalue"].clip(lower=1e-300))
+```
+
+The `clip(lower=1e-300)` guard prevents `log(0)` errors on extremely small p-values.
+
 ## Adding a New Data Source
 
 1. Create a connector in `src/connectors/` extending `BaseConnector`; implement `extract()` returning raw data.
