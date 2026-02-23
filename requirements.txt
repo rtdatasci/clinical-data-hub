@@ -1,0 +1,15 @@
+# Core
+pydantic>=2.11.0
+pandas>=2.2.0
+
+# Data generation
+faker>=24.0.0
+
+# PDF handling
+pypdf>=4.2.0
+
+# Dashboard
+streamlit>=1.32.0
+
+# Dev/testing
+pytest>=8.0.0

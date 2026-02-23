@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+*.egg
+.venv/
+venv/
+env/
+
+# Data (keep directory structure via .gitkeep, not generated content)
+data/raw/*.csv
+data/raw/*.json
+data/raw/*.txt
+data/raw/*.pdf
+data/processed/*
+!data/processed/.gitkeep
+data/outputs/*.db
+data/outputs/*.xml
+
+# Streamlit
+.streamlit/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
