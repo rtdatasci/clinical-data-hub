@@ -21,7 +21,8 @@ import streamlit as st
 
 # Allow running from any working directory
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
-from config.settings import DASHBOARD_TITLE, DB_PATH
+from config.settings import DASHBOARD_TITLE, DB_PATH, GOOGLE_API_KEY
+from src.dashboard.chatbot import nl_to_sql, validate_sql
 
 # ---------------------------------------------------------------------------
 # Page config
@@ -118,8 +119,8 @@ st.caption("Unified view across CSV · Google Sheets · Vendor JSON · Biomarker
 # ---------------------------------------------------------------------------
 # Tabs
 # ---------------------------------------------------------------------------
-tab_ov, tab_pat, tab_samp, tab_assay, tab_bm = st.tabs(
-    ["Overview", "Patients", "Samples", "Assays", "Biomarkers"]
+tab_ov, tab_pat, tab_samp, tab_assay, tab_bm, tab_chat = st.tabs(
+    ["Overview", "Patients", "Samples", "Assays", "Biomarkers", "Chat"]
 )
 
 
@@ -420,3 +421,127 @@ with tab_bm:
         LIMIT 1000
     """)
     st.dataframe(df_bm_tbl, use_container_width=True, hide_index=True)
+
+
+# ============================================================
+# TAB 6 — CHAT (NL-to-SQL)
+# ============================================================
+with tab_chat:
+    st.header("Ask Your Data")
+    st.caption("Ask natural language questions and get SQL-powered answers from the clinical database.")
+
+    # --- Provider & API key setup ---
+    col_provider, col_key = st.columns([1, 2])
+    with col_provider:
+        provider = st.selectbox(
+            "LLM Provider",
+            ["Google Gemini", "Anthropic Claude"],
+            help="Choose which AI model generates your SQL queries.",
+        )
+    with col_key:
+        user_api_key = st.text_input(
+            "Your API Key (optional)",
+            type="password",
+            placeholder="Paste your own key, or leave blank to use default Gemini",
+            help="Bring your own key, or leave empty to use the built-in Gemini key.",
+        )
+
+    # Resolve which key to use: user-provided > env fallback (Gemini only)
+    if user_api_key:
+        api_key = user_api_key
+    elif provider == "Google Gemini" and GOOGLE_API_KEY:
+        api_key = GOOGLE_API_KEY
+    elif provider == "Anthropic Claude":
+        st.warning("Please enter your Anthropic API key to use Claude.")
+        st.stop()
+    else:
+        st.warning("No API key available. Enter a key above.")
+        st.stop()
+
+    st.markdown("---")
+
+    # --- Session state ---
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
+
+    # --- Example questions ---
+    EXAMPLES = [
+        "How many patients are enrolled in each study?",
+        "Show me the top 10 genes by absolute log2 fold change",
+        "What is the QC pass rate by vendor?",
+        "List all Phase III studies with their patient counts",
+        "What sample types are most common?",
+    ]
+
+    if not st.session_state.chat_history:
+        st.markdown("**Try an example question:**")
+        cols = st.columns(len(EXAMPLES))
+        for i, (col, example) in enumerate(zip(cols, EXAMPLES)):
+            if col.button(example, key=f"example_{i}", use_container_width=True):
+                st.session_state.chat_input = example
+                st.rerun()
+
+    # --- Display chat history ---
+    for entry in st.session_state.chat_history:
+        with st.chat_message("user"):
+            st.markdown(entry["question"])
+        with st.chat_message("assistant"):
+            st.caption(f"Provider: {entry.get('provider', 'Google Gemini')}")
+            st.code(entry["sql"], language="sql")
+            if entry.get("error"):
+                st.error(entry["error"])
+            elif entry.get("result") is not None:
+                st.dataframe(entry["result"], use_container_width=True, hide_index=True)
+
+    # --- Chat input ---
+    default_input = st.session_state.pop("chat_input", None)
+    user_input = st.chat_input("Ask a question about your clinical data...")
+
+    question = default_input or user_input
+    if question:
+        with st.chat_message("user"):
+            st.markdown(question)
+
+        with st.chat_message("assistant"):
+            with st.spinner("Generating SQL..."):
+                try:
+                    sql = nl_to_sql(question, api_key, provider=provider)
+                except Exception as e:
+                    st.error(f"API error: {e}")
+                    st.session_state.chat_history.append(
+                        {"question": question, "sql": "", "error": str(e),
+                         "provider": provider}
+                    )
+                    st.stop()
+
+            st.caption(f"Provider: {provider}")
+            st.code(sql, language="sql")
+
+            # Validate safety
+            err = validate_sql(sql)
+            if err:
+                st.error(err)
+                st.session_state.chat_history.append(
+                    {"question": question, "sql": sql, "error": err,
+                     "provider": provider}
+                )
+            else:
+                try:
+                    result_df = q(sql)
+                    st.dataframe(result_df, use_container_width=True, hide_index=True)
+                    st.session_state.chat_history.append(
+                        {"question": question, "sql": sql, "result": result_df,
+                         "provider": provider}
+                    )
+                except Exception as e:
+                    st.error(f"SQL execution error: {e}")
+                    st.session_state.chat_history.append(
+                        {"question": question, "sql": sql, "error": str(e),
+                         "provider": provider}
+                    )
+
+    # --- Clear chat ---
+    if st.session_state.chat_history:
+        if st.button("Clear chat"):
+            st.session_state.chat_history = []
+            st.rerun()

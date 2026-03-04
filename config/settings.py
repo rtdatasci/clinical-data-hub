@@ -1,4 +1,9 @@
+import os
 from pathlib import Path
+
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Root paths
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -27,3 +32,6 @@ N_BIOMARKERS_PER_ASSAY = 20
 
 # Streamlit dashboard
 DASHBOARD_TITLE = "Clinical Data Hub"
+
+# LLM (NL-to-SQL chatbot)
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")

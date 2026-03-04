@@ -20,6 +20,9 @@ data/processed/*
 data/outputs/*.db
 data/outputs/*.xml
 
+# Environment
+.env
+
 # Streamlit
 .streamlit/
 
