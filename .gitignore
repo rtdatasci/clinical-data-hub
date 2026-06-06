@@ -34,3 +34,12 @@ data/outputs/*.xml
 # OS
 .DS_Store
 Thumbs.db
+
+# Secrets
+.env
+.env.local
+.env.*
+*.env
+.streamlit/secrets.toml
+*.secrets.yaml
+*.secrets.yml
